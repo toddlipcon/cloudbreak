@@ -1,12 +1,14 @@
 package com.sequenceiq.freeipa.api.v1.kerberosmgmt;
 
 import javax.validation.Valid;
+import javax.validation.constraints.NotEmpty;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 
 import com.sequenceiq.freeipa.api.v1.kerberosmgmt.doc.KeytabModelNotes;
@@ -47,19 +49,43 @@ public interface KerberosMgmtV1Endpoint {
     @ApiOperation(value = KeytabOperationsDescription.DESCRIBE_DELETE_SERVICE_PRINCIPAL, produces = ContentType.JSON,
             notes = KeytabModelNotes.DELETE_SERVICE_PRINCIPAL_NOTES,
             nickname = "deleteServicePrinciapalV1")
-    void deleteServicePrincipal(@Valid ServicePrincipalRequest request) throws Exception;
+    void deleteServicePrincipalEntityBody(@Valid ServicePrincipalRequest request) throws Exception;
+
+    @DELETE
+    @Path("serviceprincipalQP")
+    @Produces(MediaType.APPLICATION_JSON)
+    @ApiOperation(value = KeytabOperationsDescription.DESCRIBE_DELETE_SERVICE_PRINCIPAL, produces = ContentType.JSON,
+            notes = KeytabModelNotes.DELETE_SERVICE_PRINCIPAL_NOTES,
+            nickname = "deleteServicePrinciapalQPV1")
+    void deleteServicePrincipal(@QueryParam("environmentCrn") @NotEmpty String environmentCrn, @QueryParam("serverHostName") @NotEmpty String serverHostName,
+            @QueryParam("serviceName") @NotEmpty String serviceName, @QueryParam("clusterCrn") String clusterCrn) throws Exception;
 
     @DELETE
     @Path("host")
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(value = KeytabOperationsDescription.DESCRIBE_DELETE_HOST, produces = ContentType.JSON, notes = KeytabModelNotes.DELETE_HOST_NOTES,
             nickname = "deleteHostV1")
-    void deleteHost(@Valid HostRequest request) throws Exception;
+    void deleteHostEntityBody(@Valid HostRequest request) throws Exception;
+
+    @DELETE
+    @Path("hostQP")
+    @Produces(MediaType.APPLICATION_JSON)
+    @ApiOperation(value = KeytabOperationsDescription.DESCRIBE_DELETE_HOST, produces = ContentType.JSON, notes = KeytabModelNotes.DELETE_HOST_NOTES,
+            nickname = "deleteHostQPV1")
+    void deleteHost(@QueryParam("environmentCrn") @NotEmpty String environmentCrn, @QueryParam("serverHostName") @NotEmpty String serverHostName,
+            @QueryParam("clusterCrn") String clusterCrn) throws Exception;
 
     @DELETE
     @Path("cleanupClusterSecrets")
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation(value = KeytabOperationsDescription.DESCRIBE_CLEANUP, produces = ContentType.JSON, notes = KeytabModelNotes.CLEANUP_NOTES,
             nickname = "cleanupClusterSecretsV1")
-    void cleanupClusterSecrets(@Valid VaultCleanupRequest request) throws Exception;
+    void cleanupClusterSecretsEntityBody(@Valid VaultCleanupRequest request) throws Exception;
+
+    @DELETE
+    @Path("cleanupClusterSecretsQP")
+    @Produces(MediaType.APPLICATION_JSON)
+    @ApiOperation(value = KeytabOperationsDescription.DESCRIBE_CLEANUP, produces = ContentType.JSON, notes = KeytabModelNotes.CLEANUP_NOTES,
+            nickname = "cleanupClusterSecretsQSV1")
+    void cleanupClusterSecrets(@QueryParam("environmentCrn") @NotEmpty String environmentCrn, @QueryParam("clusterCrn") String clusterCrn) throws Exception;
 }

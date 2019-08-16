@@ -35,18 +35,31 @@ public class KerberosMgmtV1Controller implements KerberosMgmtV1Endpoint {
         return kerberosMgmtV1Service.getExistingServiceKeytab(request, accountId);
     }
 
-    public void deleteServicePrincipal(@Valid ServicePrincipalRequest request) throws FreeIpaClientException {
-        String accountId = crnService.getCurrentAccountId();
-        kerberosMgmtV1Service.deleteServicePrincipal(request, accountId);
+    public void deleteServicePrincipalEntityBody(@Valid ServicePrincipalRequest request) throws FreeIpaClientException, DeleteException {
+        deleteServicePrincipal(request.getEnvironmentCrn(), request.getServerHostName(), request.getServiceName(), request.getClusterCrn());
     }
 
-    public void deleteHost(@Valid HostRequest request) throws FreeIpaClientException {
+    public void deleteServicePrincipal(String environmentCrn, String serverHostName, String serviceName, String clusterCrn)
+            throws FreeIpaClientException, DeleteException {
         String accountId = crnService.getCurrentAccountId();
-        kerberosMgmtV1Service.deleteHost(request, accountId);
+        kerberosMgmtV1Service.deleteServicePrincipal(environmentCrn, serverHostName, serviceName, clusterCrn, accountId);
     }
 
-    public void cleanupClusterSecrets(@Valid VaultCleanupRequest request) throws DeleteException {
+    public void deleteHostEntityBody(@Valid HostRequest request) throws FreeIpaClientException, DeleteException {
+        deleteHost(request.getEnvironmentCrn(), request.getServerHostName(), request.getClusterCrn());
+    }
+
+    public void deleteHost(String environmentCrn, String serverHostName, String clusterCrn) throws FreeIpaClientException, DeleteException {
         String accountId = crnService.getCurrentAccountId();
-        kerberosMgmtV1Service.cleanupByCluster(request, accountId);
+        kerberosMgmtV1Service.deleteHost(environmentCrn, serverHostName, clusterCrn, accountId);
+    }
+
+    public void cleanupClusterSecretsEntityBody(@Valid VaultCleanupRequest request) throws DeleteException {
+        cleanupClusterSecrets(request.getEnvironmentCrn(), request.getClusterCrn());
+    }
+
+    public void cleanupClusterSecrets(String environmentCrn, String clusterCrn) throws DeleteException {
+        String accountId = crnService.getCurrentAccountId();
+        kerberosMgmtV1Service.cleanupByCluster(environmentCrn, clusterCrn, accountId);
     }
 }

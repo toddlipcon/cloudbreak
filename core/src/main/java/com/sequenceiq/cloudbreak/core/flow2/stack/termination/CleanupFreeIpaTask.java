@@ -14,6 +14,7 @@ import com.sequenceiq.cloudbreak.logger.MDCBuilder;
 import com.sequenceiq.freeipa.api.v1.freeipa.cleanup.CleanupRequest;
 import com.sequenceiq.freeipa.api.v1.freeipa.cleanup.CleanupResponse;
 import com.sequenceiq.freeipa.api.v1.freeipa.stack.FreeIpaV1Endpoint;
+import com.sequenceiq.freeipa.api.v1.kerberosmgmt.KerberosMgmtV1Endpoint;
 
 public class CleanupFreeIpaTask implements Runnable {
 
@@ -27,16 +28,19 @@ public class CleanupFreeIpaTask implements Runnable {
 
     private final FreeIpaV1Endpoint freeIpaV1Endpoint;
 
+    private final KerberosMgmtV1Endpoint kerberosMgmtV1Endpoint;
+
     private final String userCrn;
 
     private final Map<String, String> mdcContextMap;
 
     private final ThreadBasedUserCrnProvider threadBasedUserCrnProvider;
 
-    public CleanupFreeIpaTask(Stack stack, FreeIpaV1Endpoint freeIpaV1Endpoint, ThreadBasedUserCrnProvider threadBasedUserCrnProvider, String userCrn,
-            Map<String, String> mdcContextMap) {
+    public CleanupFreeIpaTask(Stack stack, FreeIpaV1Endpoint freeIpaV1Endpoint, KerberosMgmtV1Endpoint kerberosMgmtV1Endpoint,
+            ThreadBasedUserCrnProvider threadBasedUserCrnProvider, String userCrn, Map<String, String> mdcContextMap) {
         this.stack = stack;
         this.freeIpaV1Endpoint = freeIpaV1Endpoint;
+        this.kerberosMgmtV1Endpoint = kerberosMgmtV1Endpoint;
         this.threadBasedUserCrnProvider = threadBasedUserCrnProvider;
         this.userCrn = userCrn;
         this.mdcContextMap = mdcContextMap;
@@ -59,5 +63,14 @@ public class CleanupFreeIpaTask implements Runnable {
         } catch (Exception e) {
             LOGGER.error("FreeIPA cleanup failed", e);
         }
+        // Cleanup vault entries
+        fqdns.forEach((String fqdn) -> {
+            try {
+                kerberosMgmtV1Endpoint.deleteHost(stack.getEnvironmentCrn(), fqdn, null);
+                LOGGER.info("FreeIPA delete host finished: {}", fqdn);
+            } catch (Exception e) {
+                LOGGER.error(String.format("FreeIPA delete host {} failed", fqdn), e);
+            }
+        });
     }
 }

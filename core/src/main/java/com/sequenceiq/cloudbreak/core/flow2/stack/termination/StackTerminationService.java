@@ -29,6 +29,7 @@ import com.sequenceiq.cloudbreak.service.metrics.CloudbreakMetricService;
 import com.sequenceiq.cloudbreak.service.metrics.MetricType;
 import com.sequenceiq.cloudbreak.service.stack.flow.TerminationService;
 import com.sequenceiq.freeipa.api.v1.freeipa.stack.FreeIpaV1Endpoint;
+import com.sequenceiq.freeipa.api.v1.kerberosmgmt.KerberosMgmtV1Endpoint;
 
 @Service
 public class StackTerminationService {
@@ -60,6 +61,9 @@ public class StackTerminationService {
     private FreeIpaV1Endpoint freeIpaV1Endpoint;
 
     @Inject
+    private KerberosMgmtV1Endpoint kerberosMgmtV1Endpoint;
+
+    @Inject
     private ThreadBasedUserCrnProvider threadBasedUserCrnProvider;
 
     public void finishStackTermination(StackTerminationContext context, TerminateStackResult payload) {
@@ -73,8 +77,8 @@ public class StackTerminationService {
             datalakeResourcesService.findByDatalakeStackId(stack.getId()).ifPresent(datalakeResources ->
                     datalakeResourcesService.deleteWithMdcContextRestore(datalakeResources));
         }
-        executorService.execute(new CleanupFreeIpaTask(stack, freeIpaV1Endpoint, threadBasedUserCrnProvider, threadBasedUserCrnProvider.getUserCrn(),
-                MDCBuilder.getMdcContextMap()));
+        executorService.execute(new CleanupFreeIpaTask(stack, freeIpaV1Endpoint, kerberosMgmtV1Endpoint, threadBasedUserCrnProvider,
+                threadBasedUserCrnProvider.getUserCrn(), MDCBuilder.getMdcContextMap()));
         metricService.incrementMetricCounter(MetricType.STACK_TERMINATION_SUCCESSFUL, stack);
     }
 
