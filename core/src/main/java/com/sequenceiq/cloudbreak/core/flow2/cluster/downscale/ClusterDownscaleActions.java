@@ -1,5 +1,7 @@
 package com.sequenceiq.cloudbreak.core.flow2.cluster.downscale;
 
+import static com.sequenceiq.cloudbreak.core.flow2.cluster.downscale.ClusterDownscaleEvent.FAILURE_EVENT;
+
 import java.util.Map;
 
 import javax.inject.Inject;
@@ -59,8 +61,13 @@ public class ClusterDownscaleActions {
         return new AbstractClusterAction<>(DecommissionResult.class) {
             @Override
             protected void doExecute(ClusterViewContext context, DecommissionResult payload, Map<Object, Object> variables) {
-                clusterDownscaleService.updateMetadata(context.getStackId(), payload.getHostNames(), payload.getRequest().getHostGroupName());
-                sendEvent(context);
+                if (payload.getErrorDetails() != null) {
+                    clusterDownscaleService.updateMetadataStatus(payload);
+                    sendEvent(context.getFlowId(), FAILURE_EVENT.event(), payload);
+                } else {
+                    clusterDownscaleService.updateMetadata(context.getStackId(), payload.getHostNames(), payload.getRequest().getHostGroupName());
+                    sendEvent(context);
+                }
             }
 
             @Override

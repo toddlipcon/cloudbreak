@@ -5,6 +5,7 @@ import static com.sequenceiq.cloudbreak.api.model.Status.UPDATE_FAILED;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -16,19 +17,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import com.sequenceiq.cloudbreak.api.model.DetailedStackStatus;
-import com.sequenceiq.cloudbreak.api.model.stack.instance.InstanceStatus;
 import com.sequenceiq.cloudbreak.api.model.Status;
+import com.sequenceiq.cloudbreak.api.model.stack.instance.InstanceStatus;
 import com.sequenceiq.cloudbreak.core.flow2.event.ClusterDownscaleDetails;
 import com.sequenceiq.cloudbreak.core.flow2.stack.FlowMessageService;
 import com.sequenceiq.cloudbreak.core.flow2.stack.Msg;
+import com.sequenceiq.cloudbreak.domain.stack.Stack;
 import com.sequenceiq.cloudbreak.domain.stack.cluster.host.HostGroup;
 import com.sequenceiq.cloudbreak.domain.stack.cluster.host.HostMetadata;
-import com.sequenceiq.cloudbreak.domain.stack.Stack;
 import com.sequenceiq.cloudbreak.domain.view.ClusterView;
 import com.sequenceiq.cloudbreak.domain.view.StackView;
+import com.sequenceiq.cloudbreak.reactor.api.event.resource.DecommissionResult;
 import com.sequenceiq.cloudbreak.service.StackUpdater;
 import com.sequenceiq.cloudbreak.service.cluster.ClusterService;
 import com.sequenceiq.cloudbreak.service.cluster.NotEnoughNodeException;
+import com.sequenceiq.cloudbreak.service.cluster.ambari.AmbariDecommissioner;
 import com.sequenceiq.cloudbreak.service.hostgroup.HostGroupService;
 import com.sequenceiq.cloudbreak.service.stack.StackService;
 
@@ -51,6 +54,9 @@ public class ClusterDownscaleService {
 
     @Inject
     private HostGroupService hostGroupService;
+
+    @Inject
+    private AmbariDecommissioner ambariDecommissioner;
 
     public void clusterDownscaleStarted(long stackId, String hostGroupName, Integer scalingAdjustment, Set<Long> privateIds, ClusterDownscaleDetails details) {
         flowMessageService.fireEventAndLog(stackId, Msg.AMBARI_CLUSTER_SCALING_DOWN, Status.UPDATE_IN_PROGRESS.name());
@@ -87,6 +93,32 @@ public class ClusterDownscaleService {
         flowMessageService.fireEventAndLog(stackId, Msg.AMBARI_CLUSTER_SCALED_DOWN, AVAILABLE.name());
     }
 
+    public void updateMetadataStatus(DecommissionResult payload) {
+        if (payload.getErrorPhase() == null) {
+            updateMetadata(payload.getStackId(), payload.getHostNames(), payload.getHostGroupName());
+        } else {
+            Stack stack = stackService.getByIdWithListsInTransaction(payload.getStackId());
+            InstanceStatus status = getStatus(payload.getErrorPhase());
+            for (String hostName : payload.getHostNames()) {
+                Map<String, Map<String, String>> statusOfComponents = ambariDecommissioner.getStatusOfComponentsForHost(stack, hostName);
+                stackService.updateMetaDataStatusIfFound(payload.getStackId(), hostName, status);
+                String errorDetailes = String.format("The following host are in '%s': %s", status, String.join(", ", payload.getHostNames()));
+                flowMessageService.fireEventAndLog(payload.getStackId(),
+                        Msg.AMBARI_CLUSTER_SCALING_FAILED, UPDATE_FAILED.name(), "removed from", errorDetailes);
+            }
+        }
+    }
+
+    private InstanceStatus getStatus(String errorPhase) {
+        if (errorPhase.equals(DecommissionResult.DECOMMISSION_ERROR_PHASE)) {
+            return InstanceStatus.DECOMMISSIONED_FAILED;
+        } else if (errorPhase.equals(DecommissionResult.ORCHESTRATION_ERROR_PHASE)) {
+            return InstanceStatus.ORCHESTRATION_FAILED;
+        } else {
+            return InstanceStatus.FAILED;
+        }
+    }
+
     public void handleClusterDownscaleFailure(long stackId, Exception error) {
         String errorDetailes = error.getMessage();
         LOGGER.warn("Error during Cluster downscale flow: ", error);
@@ -97,6 +129,5 @@ public class ClusterDownscaleService {
         clusterService.updateClusterStatusByStackId(stackId, status, errorDetailes);
         stackUpdater.updateStackStatus(stackId, DetailedStackStatus.AVAILABLE, "Node(s) could not be removed from the cluster: " + errorDetailes);
         flowMessageService.fireEventAndLog(stackId, Msg.AMBARI_CLUSTER_SCALING_FAILED, UPDATE_FAILED.name(), "removed from", errorDetailes);
-
     }
 }
