@@ -101,6 +101,7 @@ public class ClusterDownscaleService {
             InstanceStatus status = getStatus(payload.getErrorPhase());
             for (String hostName : payload.getHostNames()) {
                 Map<String, Map<String, String>> statusOfComponents = ambariDecommissioner.getStatusOfComponentsForHost(stack, hostName);
+                LOGGER.info("State of '{}': {}", hostName, statusOfComponents);
                 stackService.updateMetaDataStatusIfFound(payload.getStackId(), hostName, status);
                 String errorDetailes = String.format("The following host are in '%s': %s", status, String.join(", ", payload.getHostNames()));
                 flowMessageService.fireEventAndLog(payload.getStackId(),
