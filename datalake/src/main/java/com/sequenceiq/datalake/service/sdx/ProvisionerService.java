@@ -32,6 +32,7 @@ import com.sequenceiq.datalake.entity.SdxCluster;
 import com.sequenceiq.datalake.entity.DatalakeStatusEnum;
 import com.sequenceiq.datalake.flow.statestore.DatalakeInMemoryStateStore;
 import com.sequenceiq.datalake.repository.SdxClusterRepository;
+import com.sequenceiq.datalake.service.sdx.poller.ClusterDeletionPollingAttemptMaker;
 import com.sequenceiq.datalake.service.sdx.status.SdxStatusService;
 import com.sequenceiq.environment.api.v1.environment.model.response.DetailedEnvironmentResponse;
 import com.sequenceiq.redbeams.api.endpoint.v4.databaseserver.responses.DatabaseServerStatusV4Response;
@@ -85,31 +86,14 @@ public class ProvisionerService {
             Polling.waitPeriodly(pollingConfig.getSleepTime(), pollingConfig.getSleepTimeUnit())
                     .stopIfException(pollingConfig.getStopPollingIfExceptionOccured())
                     .stopAfterDelay(pollingConfig.getDuration(), pollingConfig.getDurationTimeUnit())
-                    .run(() -> {
-                        LOGGER.info("Deletion polling cloudbreak for stack status: '{}' in '{}' env", sdxCluster.getClusterName(), sdxCluster.getEnvName());
-                        try {
-                            MDCBuilder.addRequestIdToMdcContext(requestId);
-                            StackV4Response stackV4Response = cloudbreakClient.withCrn(sdxCluster.getInitiatorUserCrn())
-                                    .stackV4Endpoint()
-                                    .get(0L, sdxCluster.getClusterName(), Collections.emptySet());
-                            LOGGER.info("Stack status of SDX {} by response from cloudbreak: {}", sdxCluster.getClusterName(),
-                                    stackV4Response.getStatus().name());
-                            LOGGER.debug("Response from cloudbreak: {}", JsonUtil.writeValueAsString(stackV4Response));
-                            if (Status.DELETE_FAILED.equals(stackV4Response.getStatus())) {
-                                notificationService.send(ResourceEvent.SDX_CLUSTER_DELETION_FAILED, sdxCluster);
-                                return AttemptResults.breakFor(
-                                        "Stack deletion failed '" + sdxCluster.getClusterName() + "', " + stackV4Response.getStatusReason()
-                                );
-                            } else {
-                                return AttemptResults.justContinue();
-                            }
-                        } catch (NotFoundException e) {
-                            return AttemptResults.finishWith(null);
-                        }
-                    });
+                    .run(new ClusterDeletionPollingAttemptMaker.ClusterDeletionPollingAttemptMakerBuilder()
+                        .cloudbreakClient(cloudbreakClient)
+                        .notificationService(notificationService)
+                        .requestId(requestId)
+                        .sdxCluster(sdxCluster)
+                        .build());
             sdxStatusService.setStatusForDatalake(DatalakeStatusEnum.STACK_DELETED, "Datalake deleted", sdxCluster);
             sdxClusterRepository.save(sdxCluster);
-            notificationService.send(ResourceEvent.SDX_CLUSTER_DELETION_FINISHED, sdxCluster);
         }, () -> {
             throw notFound("SDX cluster", id).get();
         });

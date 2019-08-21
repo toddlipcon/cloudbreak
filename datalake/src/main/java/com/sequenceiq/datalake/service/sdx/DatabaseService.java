@@ -23,6 +23,7 @@ import com.sequenceiq.datalake.entity.DatalakeStatusEnum;
 import com.sequenceiq.datalake.entity.SdxCluster;
 import com.sequenceiq.datalake.flow.statestore.DatalakeInMemoryStateStore;
 import com.sequenceiq.datalake.repository.SdxClusterRepository;
+import com.sequenceiq.datalake.service.sdx.poller.DatabaseOperationPollingAttempMaker;
 import com.sequenceiq.datalake.service.sdx.status.SdxStatusService;
 import com.sequenceiq.environment.api.v1.environment.model.response.DetailedEnvironmentResponse;
 import com.sequenceiq.redbeams.api.endpoint.v4.databaseserver.requests.AllocateDatabaseServerV4Request;
@@ -140,40 +141,18 @@ public class DatabaseService {
 
     public DatabaseServerStatusV4Response waitAndGetDatabase(SdxCluster sdxCluster, String databaseCrn, PollingConfig pollingConfig,
             SdxDatabaseOperation sdxDatabaseOperation, String requestId, boolean cancellable) {
-        DatabaseServerStatusV4Response response = Polling.waitPeriodly(pollingConfig.getSleepTime(), pollingConfig.getSleepTimeUnit())
+        return Polling.waitPeriodly(pollingConfig.getSleepTime(), pollingConfig.getSleepTimeUnit())
                 .stopIfException(pollingConfig.getStopPollingIfExceptionOccured())
                 .stopAfterDelay(pollingConfig.getDuration(), pollingConfig.getDurationTimeUnit())
-                .run(() -> {
-                    if (cancellable && PollGroup.CANCELLED.equals(DatalakeInMemoryStateStore.get(sdxCluster.getId()))) {
-                        LOGGER.info("Database wait polling cancelled in inmemory store, id: " + sdxCluster.getId());
-                        return AttemptResults.breakFor("Database wait polling cancelled in inmemory store, id: " + sdxCluster.getId());
-                    }
-                    try {
-                        MDCBuilder.addRequestIdToMdcContext(requestId);
-                        LOGGER.info("Creation polling redbeams for database status: '{}' in '{}' env",
-                                sdxCluster.getClusterName(), sdxCluster.getEnvName());
-                        DatabaseServerStatusV4Response rdsStatus = getDatabaseStatus(databaseCrn);
-                        LOGGER.info("Response from redbeams: {}", JsonUtil.writeValueAsString(rdsStatus));
-                        if (sdxDatabaseOperation.getExitCriteria().apply(rdsStatus.getStatus())) {
-                            return AttemptResults.finishWith(rdsStatus);
-                        } else {
-                            if (sdxDatabaseOperation.getFailureCriteria().apply(rdsStatus.getStatus())) {
-                                notificationService.send(sdxDatabaseOperation.getFailedEvent(), sdxCluster);
-                                if (rdsStatus.getStatusReason() != null && rdsStatus.getStatusReason().contains("does not exist")) {
-                                    return AttemptResults.finishWith(null);
-                                }
-                                return AttemptResults.breakFor("Database operation failed " + sdxCluster.getEnvName()
-                                        + " statusReason: " + rdsStatus.getStatusReason());
-                            } else {
-                                return AttemptResults.justContinue();
-                            }
-                        }
-                    } catch (NotFoundException e) {
-                        return AttemptResults.finishWith(null);
-                    }
-                });
-        notificationService.send(sdxDatabaseOperation.getFinishedEvent(), sdxCluster);
-        return response;
+                .run(new DatabaseOperationPollingAttempMaker.DatabaseOperationPollingAttempMakerBuilder()
+                        .databaseCrn(databaseCrn)
+                        .databaseStatusFunction(this::getDatabaseStatus)
+                        .cancellable(cancellable)
+                        .notificationService(notificationService)
+                        .requestId(requestId)
+                        .sdxDatabaseOperation(sdxDatabaseOperation)
+                        .sdxCluster(sdxCluster)
+                        .build());
     }
 
     private DatabaseServerStatusV4Response getDatabaseStatus(String databaseCrn) {
