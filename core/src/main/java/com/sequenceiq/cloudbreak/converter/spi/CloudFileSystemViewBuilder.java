@@ -25,7 +25,8 @@ public class CloudFileSystemViewBuilder {
         Optional<CloudFileSystemView> fileSystemView;
         if (fileSystem != null) {
             SpiFileSystem spiFileSystem = fileSystemConverter.fileSystemToSpi(fileSystem);
-            if (componentsByHostGroup.get(instanceGroup.getGroupName()).contains(KnoxRoles.IDBROKER)) {
+            Set<String> components = componentsByHostGroup.get(instanceGroup.getGroupName());
+            if (components != null && components.contains(KnoxRoles.IDBROKER)) {
                 fileSystemView = spiFileSystem.getCloudFileSystems().stream()
                         .filter(cloudFileSystemView -> cloudFileSystemView.getCloudIdentityType().equals(CloudIdentityType.ID_BROKER))
                         .findFirst();

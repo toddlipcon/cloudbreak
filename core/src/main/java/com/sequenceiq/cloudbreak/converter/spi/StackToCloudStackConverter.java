@@ -202,7 +202,7 @@ public class StackToCloudStackConverter {
         List<Group> groups = new ArrayList<>();
         Cluster cluster = stack.getCluster();
         if (cluster != null && cluster.getBlueprint() != null) {
-            CmTemplateProcessor cmTemplateProcessor = cmTemplateProcessorFactory.get(cluster.getBlueprint().getBlueprintText());
+            CmTemplateProcessor cmTemplateProcessor = cmTemplateProcessorFactory.get(cluster.getExtendedBlueprintText());
             Map<String, Set<String>> componentsByHostGroup = cmTemplateProcessor.getComponentsByHostGroup();
             for (InstanceGroup instanceGroup : instanceGroups) {
                 if (instanceGroup.getTemplate() != null) {
